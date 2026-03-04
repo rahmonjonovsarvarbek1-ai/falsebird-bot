@@ -10,7 +10,7 @@ from yt_dlp import YoutubeDL
 from concurrent.futures import ThreadPoolExecutor
 
 # --- SOZLAMALAR ---
-TOKEN = "8487764182:AAEmvhurjHuie5sFxuacCyh9N4p7xLDF-Jk" # .env ga oling!
+TOKEN = "8741407408:AAEh6x5uz7p-fsQ0UO0XXFloSnWXAU_aMbg" # .env ga oling!
 DOWNLOAD_PATH = "downloads/"
 os.makedirs(DOWNLOAD_PATH, exist_ok=True)
 
@@ -134,4 +134,5 @@ async def main():
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
+
     asyncio.run(main())
