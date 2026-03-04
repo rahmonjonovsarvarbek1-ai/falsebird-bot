@@ -2,15 +2,17 @@ import os
 import asyncio
 import logging
 import uuid
-import glob # Faylni topish uchun qo'shildi
+import glob
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from yt_dlp import YoutubeDL
 from concurrent.futures import ThreadPoolExecutor
+from aiohttp import web # Render uchun qo'shildi
 
 # --- SOZLAMALAR ---
-TOKEN = "8741407408:AAEh6x5uz7p-fsQ0UO0XXFloSnWXAU_aMbg" # .env ga oling!
+# Tokenni Render "Environment Variables"dan olamiz
+TOKEN = os.getenv("8741407408:AAEh6x5uz7p-fsQ0UO0XXFloSnWXAU_aMbg") 
 DOWNLOAD_PATH = "downloads/"
 os.makedirs(DOWNLOAD_PATH, exist_ok=True)
 
@@ -22,6 +24,22 @@ dp = Dispatcher()
 thread_pool = ThreadPoolExecutor(max_workers=10)
 url_storage = {}
 
+# --- RENDER PORTNI BAND QILISH UCHUN KICHIK SERVER ---
+async def handle(request):
+    return web.Response(text="BlueSave Pro is running!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    # Render beradigan PORT-ni (odatda 10000) ishlatadi
+    port = int(os.getenv("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"✅ Web server {port}-portda ishga tushdi")
+
+# --- MEDIA YUKLASH FUNKSIYASI ---
 def download_media(url, mode="video"):
     file_id = f"{uuid.uuid4().hex}"
     outtmpl = f'{DOWNLOAD_PATH}{file_id}.%(ext)s'
@@ -46,8 +64,6 @@ def download_media(url, mode="video"):
         info = ydl.extract_info(url, download=True)
         title = info.get('title', 'Media')
         
-        # Post-processorlardan keyin fayl nomini aniqlash
-        # Chunki mp3 bo'lganda kengaytma o'zgaradi
         expected_file = ydl.prepare_filename(info)
         if mode == "audio":
             expected_file = os.path.splitext(expected_file)[0] + ".mp3"
@@ -57,7 +73,7 @@ def download_media(url, mode="video"):
 # --- HANDLERS ---
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
-    await message.answer("🌟 **BlueSave Pro v5.2 Active!**\n\nYouTube, Instagram yoki TikTok linkini yuboring!")
+    await message.answer("🌟 **BlueSave Pro v5.2 Active!**\n\YouTube, Instagram yoki TikTok linkini yuboring!")
 
 @dp.message(F.text.startswith("http"))
 async def handle_link(message: types.Message):
@@ -65,8 +81,6 @@ async def handle_link(message: types.Message):
     msg = await message.answer("🔍 Tekshirilmoqda...")
     
     try:
-        # get_video_info ni alohida chaqirmasdan, download ichida ham qilish mumkin, 
-        # lekin oldindan ko'rish uchun quyidagicha qoldiramiz:
         loop = asyncio.get_running_loop()
         ydl_opts = {'quiet': True, 'noplaylist': True}
         
@@ -87,12 +101,12 @@ async def handle_link(message: types.Message):
         ])
         
         await msg.delete()
-        title = info.get('title', 'Video')[:50] # Sarlavha juda uzun bo'lmasligi uchun
+        title = info.get('title', 'Video')[:50]
         await message.reply(f"🎬 **Nomi:** {title}\n\nTanlang:", reply_markup=keyboard)
         
     except Exception as e:
         logger.error(f"Info Error: {e}")
-        await msg.edit_text("❌ Xatolik: Linkni o'qib bo'lmadi yoki format qo'llab-quvvatlanmaydi.")
+        await msg.edit_text("❌ Xatolik: Linkni o'qib bo'lmadi.")
 
 @dp.callback_query(F.data.startswith(("v|", "a|")))
 async def process_download(callback: types.CallbackQuery):
@@ -100,7 +114,7 @@ async def process_download(callback: types.CallbackQuery):
     url = url_storage.get(link_id)
     
     if not url:
-        await callback.answer("❌ Seans muddati tugagan. Linkni qayta yuboring.", show_alert=True)
+        await callback.answer("❌ Seans muddati tugagan.", show_alert=True)
         return
 
     mode = "video" if prefix == "v" else "audio"
@@ -119,7 +133,6 @@ async def process_download(callback: types.CallbackQuery):
             else:
                 await callback.message.answer_audio(audio=media, title=title, caption=f"✅ {title}")
             
-            # Tozalash
             if os.path.exists(file_path):
                 os.remove(file_path)
             await status_msg.delete()
@@ -128,11 +141,14 @@ async def process_download(callback: types.CallbackQuery):
             
     except Exception as e:
         logger.error(f"Download Error: {e}")
-        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)[:50]}...")
+        await status_msg.edit_text(f"❌ Xatolik: {str(e)[:50]}...")
 
 async def main():
+    # 1. Avval veb-serverni ishga tushiramiz (Render uchun)
+    await start_web_server()
+    # 2. Keyin botni ishga tushiramiz
+    logger.info("📡 Bot ishga tushmoqda...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-
     asyncio.run(main())
