@@ -24,12 +24,12 @@ dp = Dispatcher()
 thread_pool = ThreadPoolExecutor(max_workers=10)
 url_storage = {}
 
-# --- FASTAPI / LIFESPAN (Sodda va aniq) ---
+# --- FASTAPI / LIFESPAN ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("\n" + "-"*30)
-    print("✅ Falsebird-bot siz uchun tayyor !")
-    print("🚀 Menga video yoki post linkini yuboring men sizga uni tez va sifatli holatda topaman !")
+    print("✅ Falsebird-bot siz uchun tayyor!")
+    print("🚀 Video yoki post linkini yuboring, men uni topaman!")
     print("-"*30 + "\n")
     
     polling_task = asyncio.create_task(dp.start_polling(bot))
@@ -40,42 +40,50 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# --- YUKLASH LOGIKASI ---
+# --- YUKLASH LOGIKASI (Professional Update) ---
 def download_media(url, mode="video"):
     file_id = uuid.uuid4().hex
+    
+    # YouTube blokirovkalarini chetlab o'tish uchun kengaytirilgan sozlamalar
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
         'outtmpl': f'{DOWNLOAD_PATH}{file_id}.%(ext)s',
+        'geo_bypass': True,
+        'nocheckcertificate': True,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'referer': 'https://www.google.com/',
-        'geo_bypass': True,
+        'http_headers': {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
+        }
     }
     
     if mode == "video":
-        opts_v = ydl_opts.copy()
-        opts_v['format'] = 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-        with YoutubeDL(opts_v) as ydl:
+        ydl_opts['format'] = 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             return ydl.prepare_filename(info), info.get('title', 'Video')
     else:
-        opts_a = ydl_opts.copy()
-        opts_a['format'] = 'bestaudio/best'
-        opts_a['postprocessors'] = [{
+        ydl_opts['format'] = 'bestaudio/best'
+        ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }]
-        with YoutubeDL(opts_a) as ydl:
+        with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            return os.path.splitext(filename)[0] + ".mp3", info.get('title', 'Audio')
+            # Mp3 kengaytmasini aniq ko'rsatish
+            final_name = os.path.splitext(filename)[0] + ".mp3"
+            return final_name, info.get('title', 'Audio')
 
 # --- HANDLERS ---
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
-    await message.answer("👋 Salom! Men **Falsebird-bot**man.\n\nYouTube, Instagram, TikTok yoki Pinterest linkini yuboring, men uni yuklab beraman!")
+    await message.answer("👋 Salom! Men **Falsebird-bot**man.\n\nYouTube, Instagram, TikTok yoki Pinterest linkini yuboring!")
 
 @dp.message(F.text.startswith("http"))
 async def handle_link(message: types.Message):
@@ -85,7 +93,13 @@ async def handle_link(message: types.Message):
     try:
         loop = asyncio.get_running_loop()
         def fetch_info():
-            with YoutubeDL({'quiet': True, 'nocheckcertificate': True}) as ydl:
+            # Ma'lumot olishda ham sarlavhalar muhim
+            opts = {
+                'quiet': True, 
+                'nocheckcertificate': True,
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            }
+            with YoutubeDL(opts) as ydl:
                 return ydl.extract_info(url, download=False)
         
         info = await loop.run_in_executor(thread_pool, fetch_info)
@@ -98,16 +112,18 @@ async def handle_link(message: types.Message):
         ]])
         
         await status.delete()
-        await message.reply(f"📌 **Nomi:** {info.get('title', 'Media')[:50]}...\n\nFormatni tanlang:", reply_markup=keyboard)
-    except Exception:
-        await status.edit_text("❌ Xato: Havolani o'qib bo'lmadi.")
+        title = info.get('title', 'Media')[:50]
+        await message.reply(f"📌 **Nomi:** {title}...\n\nTanlang:", reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Xato: {e}")
+        await status.edit_text("❌ Xato: Havolani o'qib bo'lmadi. (YouTube cheklovi bo'lishi mumkin)")
 
 @dp.callback_query(F.data.startswith(("v|", "a|")))
 async def process_download(callback: types.CallbackQuery):
     prefix, link_id = callback.data.split("|")
     url = url_storage.get(link_id)
     if not url:
-        await callback.answer("❌ Xato! Linkni qayta yuboring.", show_alert=True)
+        await callback.answer("❌ Seans muddati tugagan.", show_alert=True)
         return
 
     mode = "video" if prefix == "v" else "audio"
@@ -128,13 +144,14 @@ async def process_download(callback: types.CallbackQuery):
             await status_msg.delete()
             os.remove(file_path)
         else:
-            await status_msg.edit_text("❌ Fayl topilmadi.")
+            await status_msg.edit_text("❌ Fayl yaratilmadi.")
     except Exception as e:
-        await status_msg.edit_text(f"❌ Xatolik: {str(e)[:50]}")
+        logger.error(f"Download Error: {e}")
+        await status_msg.edit_text(f"❌ Xatolik: Yuklash rad etildi (YouTube/Instagram blokirovkasi).")
 
 @app.get("/")
 async def root():
-    return {"status": "active", "name": "Falsebird-bot"}
+    return {"status": "active", "bot": "Falsebird-bot"}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
