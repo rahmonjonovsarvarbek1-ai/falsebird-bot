@@ -77,6 +77,10 @@ def download_media(url, mode="video"):
 async def lifespan(app: FastAPI):
     # Bot yonganda eski webhook va chigalliklarni tozalaydi
     await bot.delete_webhook(drop_pending_updates=True)
+    
+    # Kichik kutish qo'shish (Eski nusxa o'chishi uchun vaqt beradi)
+    await asyncio.sleep(1) 
+    
     polling_task = asyncio.create_task(dp.start_polling(bot))
     yield
     polling_task.cancel()
@@ -144,3 +148,4 @@ async def root(): return {"status": "online"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
