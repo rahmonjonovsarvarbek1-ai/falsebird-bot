@@ -63,21 +63,24 @@ def download_media(url, mode="video"):
             return None, None, None
 
 # --- FASTAPI LIFESPAN (Conflict'ni "o'ldiradigan" qism) ---
+# --- FASTAPI LIFESPAN (Barcha Conflict'larni o'ldiruvchi versiya) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. BOTNI TOZALASH - boshqa hamma pollinglarni to'xtatadi
-    logger.info("Conflict'larni tozalash boshlandi...")
+    # 1. Telegramdagi barcha eski "osilib" qolgan ulanishlarni tozalaymiz
+    logger.info("Conflict'larga qarshi majburiy tozalash boshlandi...")
     await bot.delete_webhook(drop_pending_updates=True)
     
-    # 2. Render uchun majburiy tanaffus (Eski nusxa yopilishi shart!)
-    await asyncio.sleep(7) 
+    # 2. Render eski nusxani o'chirishi uchun 10 soniya kutamiz
+    # Bu vaqt ichida Telegram eski nusxani "yo'qotib" qo'yadi
+    await asyncio.sleep(10) 
     
-    # 3. Pollingni boshlash
+    # 3. Faqat shundan keyin yangi botni ishga tushiramiz
     polling_task = asyncio.create_task(dp.start_polling(bot, drop_pending_updates=True))
-    logger.info("Bot yagona nusxada ishga tushdi!")
+    logger.info("Bot yagona nusxada muvaffaqiyatli ishga tushdi!")
     
     yield
     
+    # Bot o'chayotganda sessiyani toza yopamiz
     polling_task.cancel()
     await bot.session.close()
 
@@ -139,3 +142,4 @@ async def root(): return {"status": "ok"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
