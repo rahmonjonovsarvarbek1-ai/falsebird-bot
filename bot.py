@@ -9,7 +9,7 @@ from yt_dlp import YoutubeDL
 from concurrent.futures import ThreadPoolExecutor
 
 # --- KONFIGURATSIYA ---
-TOKEN = "8741407408:AAE6E20-Hzt83haYdSBl9Tfx43ILuK5pVqo"
+TOKEN = "8741407408:AAHOdJlvXL77wxBl9bNHp6gJw_GtFtIhiGg"
 DOWNLOAD_PATH = "downloads/"
 os.makedirs(DOWNLOAD_PATH, exist_ok=True)
 
@@ -164,3 +164,4 @@ async def root(): return {"status": "online"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
