@@ -150,3 +150,4 @@ if __name__ == "__main__":
     # Render PORT muhit o'zgaruvchisini avtomatik beradi
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
