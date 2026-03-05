@@ -22,7 +22,7 @@ dp = Dispatcher()
 thread_pool = ThreadPoolExecutor(max_workers=10)
 url_storage = {}
 
-# --- PROFESSIONAL YUKLASH FUNKSIYASI ---
+# --- PROFESSIONAL YUKLASH FUNKSIYASI (KUCHAYTIRILGAN) ---
 def download_media(url, mode="video"):
     file_id = uuid.uuid4().hex
     
@@ -35,15 +35,25 @@ def download_media(url, mode="video"):
         # Brauzer simulyatsiyasi (Blokdan qochish uchun)
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'referer': 'https://www.google.com/',
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}, 'instagram': {'check_headers': True}},
+        # Maxsus mijozlar simulyatsiyasi (Instagram va YouTube uchun)
+        'extractor_args': {
+            'youtube': {'player_client': ['android', 'web']}, 
+            'instagram': {'check_headers': True}
+        },
+        # HTTP Headerlarni kuchaytirish
+        'http_headers': {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
+        }
     }
 
     if mode == "video":
-        # Sifatni 720p bilan cheklash (50MB limitdan oshmaslik uchun)
+        # Sifatni 720p bilan cheklash va MP4 formatini majburlash
         ydl_opts['format'] = 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best'
     elif mode == "audio" or mode == "search":
         ydl_opts['format'] = 'bestaudio/best'
-        if mode == "search": url = f"ytsearch1:{url}" # Musiqa qidiruvi
+        if mode == "search": url = f"ytsearch1:{url}"
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -59,7 +69,7 @@ def download_media(url, mode="video"):
                 filename = os.path.splitext(filename)[0] + ".mp3"
             return filename, info.get('title', 'Media')
         except Exception as e:
-            logger.error(f"Xato: {e}")
+            logger.error(f"Yuklashda xato: {e}")
             return None, None
 
 # --- FASTAPI LIFESPAN (Conflict xatosini yo'qotadi) ---
@@ -77,7 +87,7 @@ app = FastAPI(lifespan=lifespan)
 # --- XABARLARNI QAYTA ISHLASH ---
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message):
-    await m.answer("👋 Salom! Link yuboring yoki musiqa nomini yozing!")
+    await m.answer("👋 Salom! Link yuboring (Instagram, YouTube, Pinterest) yoki musiqa nomini yozing!")
 
 @dp.message(F.text)
 async def handle_text(message: types.Message):
@@ -117,12 +127,17 @@ async def dl_callback(callback: types.CallbackQuery):
             await status_msg.edit_text("⚠️ Kechirasiz, fayl 50MB dan katta. Uni yuborib bo'lmaydi.")
         else:
             await status_msg.edit_text("📤 Telegramga yuklanmoqda...")
-            if mode == "video": await callback.message.answer_video(video=FSInputFile(path), caption=f"✅ {title}\n@falsebird_bot")
-            else: await callback.message.answer_audio(audio=FSInputFile(path), title=title)
-            await status_msg.delete()
+            try:
+                if mode == "video":
+                    await callback.message.answer_video(video=FSInputFile(path), caption=f"✅ {title}\n@falsebird_bot")
+                else:
+                    await callback.message.answer_audio(audio=FSInputFile(path), title=title)
+                await status_msg.delete()
+            except Exception as e:
+                await status_msg.edit_text(f"❌ Telegramga yuborishda xato.")
         os.remove(path)
     else:
-        await status_msg.edit_text("❌ Xato: Platforma cheklov qo'ydi yoki link noto'g'ri.")
+        await status_msg.edit_text("❌ Xato: Platforma blokladi yoki link noto'g'ri. Birozdan so'ng qayta urining.")
 
 @app.get("/")
 async def root(): return {"status": "online"}
