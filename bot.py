@@ -8,7 +8,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 # --- KONFIGURATSIYA ---
-TOKEN = "8741407408:AAE6E20-Hzt83haYdSBl9Tfx43ILuK5pVqo"
+TOKEN = "8741407408:AAHOdJlvXL77wxBl9bNHp6gJw_GtFtIhiGg"
 DOWNLOAD_PATH = "downloads/"
 os.makedirs(DOWNLOAD_PATH, exist_ok=True)
 
