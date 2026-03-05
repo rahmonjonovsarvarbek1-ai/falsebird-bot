@@ -12,7 +12,6 @@ from yt_dlp import YoutubeDL
 from concurrent.futures import ThreadPoolExecutor
 
 # --- SOZLAMALAR ---
-# Tokenni bu yerda qoldirishingiz yoki Render Environment'ga BOT_TOKEN deb kiritishingiz mumkin
 TOKEN = "8741407408:AAEh6x5uz7p-fsQ0UO0XXFloSnWXAU_aMbg"
 DOWNLOAD_PATH = "downloads/"
 os.makedirs(DOWNLOAD_PATH, exist_ok=True)
@@ -25,99 +24,94 @@ dp = Dispatcher()
 thread_pool = ThreadPoolExecutor(max_workers=10)
 url_storage = {}
 
-# --- FASTAPI QISMI (Render uchun shart) ---
+# --- FASTAPI / LIFESPAN (Sodda va aniq) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 Falsebird Bot v5.2 Professional Mode Active!")
-    # Botni polling rejimida alohida task qilib ishga tushiramiz
+    print("\n" + "-"*30)
+    print("✅ Falsebird-bot siz uchun tayyor !")
+    print("🚀 Menga video yoki post linkini yuboring men sizga uni tez va sifatli holatda topaman !")
+    print("-"*30 + "\n")
+    
     polling_task = asyncio.create_task(dp.start_polling(bot))
     yield
     polling_task.cancel()
     await bot.session.close()
+    print("🛑 Falsebird-bot to'xtatildi.")
 
 app = FastAPI(lifespan=lifespan)
 
 # --- YUKLASH LOGIKASI ---
 def download_media(url, mode="video"):
-    file_id = f"{uuid.uuid4().hex}"
-    
+    file_id = uuid.uuid4().hex
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
         'outtmpl': f'{DOWNLOAD_PATH}{file_id}.%(ext)s',
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'referer': 'https://www.google.com/',
+        'geo_bypass': True,
     }
-
+    
     if mode == "video":
-        ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        opts_v = ydl_opts.copy()
+        opts_v['format'] = 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        with YoutubeDL(opts_v) as ydl:
+            info = ydl.extract_info(url, download=True)
+            return ydl.prepare_filename(info), info.get('title', 'Video')
     else:
-        ydl_opts['format'] = 'bestaudio/best'
-        ydl_opts['postprocessors'] = [{
+        opts_a = ydl_opts.copy()
+        opts_a['format'] = 'bestaudio/best'
+        opts_a['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }]
-
-    with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        title = info.get('title', 'Media')
-        filename = ydl.prepare_filename(info)
-        
-        # Audio rejimda kengaytmani .mp3 ga to'g'irlash
-        if mode == "audio":
-            base, _ = os.path.splitext(filename)
-            filename = f"{base}.mp3"
-            
-        return filename, title
+        with YoutubeDL(opts_a) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            return os.path.splitext(filename)[0] + ".mp3", info.get('title', 'Audio')
 
 # --- HANDLERS ---
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message):
-    await message.answer("🌟 **BlueSave Pro v5.2 Active!**\n\nYouTube, Instagram, TikTok yoki Pinterest linkini yuboring!")
+    await message.answer("👋 Salom! Men **Falsebird-bot**man.\n\nYouTube, Instagram, TikTok yoki Pinterest linkini yuboring, men uni yuklab beraman!")
 
 @dp.message(F.text.startswith("http"))
 async def handle_link(message: types.Message):
     url = message.text
-    msg = await message.answer("🔍 Havola tekshirilmoqda...")
+    status = await message.answer("🔍 Havola tekshirilmoqda...")
     
     try:
         loop = asyncio.get_running_loop()
         def fetch_info():
-            with YoutubeDL({'quiet': True, 'noplaylist': True}) as ydl:
+            with YoutubeDL({'quiet': True, 'nocheckcertificate': True}) as ydl:
                 return ydl.extract_info(url, download=False)
-
-        info = await loop.run_in_executor(thread_pool, fetch_info)
         
-        link_id = uuid.uuid4().hex[:10]
+        info = await loop.run_in_executor(thread_pool, fetch_info)
+        link_id = uuid.uuid4().hex[:12]
         url_storage[link_id] = url
         
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="🎬 Video MP4", callback_data=f"v|{link_id}"),
-                InlineKeyboardButton(text="🎵 Musiqa MP3", callback_data=f"a|{link_id}")
-            ]
-        ])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="🎬 Video", callback_data=f"v|{link_id}"),
+            InlineKeyboardButton(text="🎵 Audio", callback_data=f"a|{link_id}")
+        ]])
         
-        title = info.get('title', 'Video')[:50]
-        await msg.delete()
-        await message.reply(f"📌 **Nomi:** {title}\n\nFormatni tanlang:", reply_markup=keyboard)
-        
-    except Exception as e:
-        logger.error(f"Info Error: {e}")
-        await msg.edit_text("❌ Xatolik: Linkni o'qib bo'lmadi yoki media yopiq.")
+        await status.delete()
+        await message.reply(f"📌 **Nomi:** {info.get('title', 'Media')[:50]}...\n\nFormatni tanlang:", reply_markup=keyboard)
+    except Exception:
+        await status.edit_text("❌ Xato: Havolani o'qib bo'lmadi.")
 
 @dp.callback_query(F.data.startswith(("v|", "a|")))
 async def process_download(callback: types.CallbackQuery):
     prefix, link_id = callback.data.split("|")
     url = url_storage.get(link_id)
-    
     if not url:
-        await callback.answer("❌ Seans muddati tugagan. Linkni qayta yuboring.", show_alert=True)
+        await callback.answer("❌ Xato! Linkni qayta yuboring.", show_alert=True)
         return
 
     mode = "video" if prefix == "v" else "audio"
-    status_msg = await callback.message.edit_text(f"⏳ {mode.capitalize()} yuklanmoqda (kutib turing)...")
+    status_msg = await callback.message.edit_text(f"⏳ {mode.capitalize()} yuklanmoqda...")
     
     try:
         loop = asyncio.get_running_loop()
@@ -126,28 +120,22 @@ async def process_download(callback: types.CallbackQuery):
         if os.path.exists(file_path):
             await status_msg.edit_text("📤 Telegramga yuborilmoqda...")
             media = FSInputFile(file_path)
-            
             if mode == "video":
-                await callback.message.answer_video(video=media, caption=f"✅ {title}")
+                await callback.message.answer_video(video=media, caption=f"✅ {title}\n\n@falsebird_bot")
             else:
-                await callback.message.answer_audio(audio=media, title=title, caption=f"✅ {title}")
+                await callback.message.answer_audio(audio=media, title=title, caption=f"✅ {title}\n\n@falsebird_bot")
             
-            os.remove(file_path) # Faylni o'chirish
             await status_msg.delete()
+            os.remove(file_path)
         else:
-            await status_msg.edit_text("❌ Xato: Fayl topilmadi.")
-            
+            await status_msg.edit_text("❌ Fayl topilmadi.")
     except Exception as e:
-        logger.error(f"Download Error: {e}")
-        await status_msg.edit_text(f"❌ Xatolik: {str(e)[:50]}...")
+        await status_msg.edit_text(f"❌ Xatolik: {str(e)[:50]}")
 
 @app.get("/")
 async def root():
-    return {"status": "online", "bot": "Falsebird"}
+    return {"status": "active", "name": "Falsebird-bot"}
 
-# --- SERVERNI ISHGA TUSHIRISH ---
 if __name__ == "__main__":
-    # Render PORT muhit o'zgaruvchisini avtomatik beradi
     port = int(os.environ.get("PORT", 10000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-
