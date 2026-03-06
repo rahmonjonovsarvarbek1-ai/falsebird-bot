@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 # --- KONFIGURATSIYA ---
 TOKEN = "8741407408:AAHOdJlvXL77wxBl9bNHp6gJw_GtFtIhiGg"
-CHANNELS = ["@YOUR_CHANNEL"] # O'zingizning kanalingizni yozing (masalan: @uz_python)
+CHANNELS = ["@falsebird"] # O'zingizning kanalingizni yozing (masalan: @uz_python)
 DOWNLOAD_PATH = "downloads/"
 os.makedirs(DOWNLOAD_PATH, exist_ok=True)
 
@@ -166,3 +166,4 @@ async def root(): return {"status": "ok"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
