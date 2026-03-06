@@ -153,7 +153,7 @@ async def process_download(callback: types.CallbackQuery):
         except:
             pass # Agar keshdagi file_id o'chib ketgan bo'lsas qaytadan yuklaydi
 
-    await callback.message.edit_text(f"⏳ {mode.capitalize()} tayyorlanmoqda (Render orqali)...")
+    await callback.message.edit_text(f"⏳ {mode.capitalize()} tayyorlanmoqda...")
     loop = asyncio.get_running_loop()
     path, title, _ = await loop.run_in_executor(None, download_media, url, mode)
     
@@ -165,7 +165,7 @@ async def process_download(callback: types.CallbackQuery):
             os.remove(path)
             return
 
-        await callback.message.edit_text("📤 Telegram serveriga yuklanmoqda...")
+        await callback.message.edit_text("📤 Yuklanmoqda...")
         try:
             if mode == "video":
                 msg = await callback.message.answer_video(video=FSInputFile(path), caption=f"✅ {title}\n@falsebird_bot")
@@ -177,10 +177,11 @@ async def process_download(callback: types.CallbackQuery):
             if os.path.exists(path): os.remove(path)
             await callback.message.delete()
     else:
-        await callback.message.edit_text("❌ Xato: Videoni yuklab bo'lmadi. IP bloklangan yoki link noto'g'ri.")
+        await callback.message.edit_text("❌ Xato: Videoni yuklab bo'lmadi. IP bloklangan bo'lishi mumkin yoki link noto'g'ri. Birozdan so'ng qayta urinib ko'ring!")
 
 @app.get("/")
 async def root(): return {"status": "ok"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
